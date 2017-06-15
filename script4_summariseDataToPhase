@@ -1,0 +1,133 @@
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Summarise data to dive phase scale - stage 4
+
+rm(list=ls())
+
+require(ggplot2)
+
+Sys.setenv(TZ='UTC') #### R will sometimes change the time of time variables when unlisting - so for safetly always set system to UTC - or whatever timezone you work in
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Creat folders
+
+if (file.exists("./DataSorted/output4_DivePhaseSummarising")==FALSE){
+  dir.create("./DataSorted/output4_DivePhaseSummarising")
+}
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Read in data and replace NaN with NA
+
+pupSeg <- read.table("./DataSorted/output3_PhaseAssignment/pupSeg_withDivePhases.csv", sep = ",", header = T)
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Sort time - convert to POSIXct
+
+pupSeg$diveStart <- as.POSIXct(pupSeg$diveStart, tz = "UTC", format = "%H:%M:%S %d-%b-%Y") ##### Check these correspond to your own data
+pupSeg$diveEnd <- as.POSIXct(pupSeg$diveEnd, tz = "UTC", format = "%d-%b-%Y %H:%M:%S") ##### Check these correspond to your own data
+pupSeg$segStart <- as.POSIXct(pupSeg$segStart, tz = "UTC", format = "%H:%M:%S %d-%b-%Y") ##### Check these correspond to your own data
+pupSeg$segEnd <- as.POSIXct(pupSeg$segEnd, tz = "UTC", format = "%d-%b-%Y %H:%M:%S") ##### Check these correspond to your own data
+
+head(pupSeg$diveStart)
+head(pupSeg$diveEnd)
+head(pupSeg$segStart)
+head(pupSeg$segEnd)
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Summarise to dive level
+
+## How many segments per phase
+
+descentPhase <- unlist(unname(lapply(split(pupSeg$divePhase, list(as.factor(pupSeg$diveID), as.factor(pupSeg$pupID)), drop=TRUE), function(x) length(which(x==1)))))
+bottomPhase <- unlist(unname(lapply(split(pupSeg$divePhase, list(as.factor(pupSeg$diveID), as.factor(pupSeg$pupID)), drop=TRUE), function(x) length(which(x==2)))))
+ascentPhase <- unlist(unname(lapply(split(pupSeg$divePhase, list(as.factor(pupSeg$diveID), as.factor(pupSeg$pupID)), drop=TRUE), function(x) length(which(x==3)))))
+
+length(which(descentPhase > 1))
+length(which(bottomPhase > 1))
+length(which(ascentPhase > 1))
+
+rm(descentPhase, bottomPhase, ascentPhase)
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+##%%%%%%%%%%%%%% Create reference ID for clustering
+
+pupSeg$clusterID <- as.numeric(interaction(pupSeg$divePhase, pupSeg$diveID, pupSeg$pupID, drop=TRUE))
+
+##%%%%%%%%%%%%%%
+
+pupDivePhase <- data.frame(pupID = unlist(unname(lapply(split(pupSeg$pupID, as.factor(pupSeg$clusterID)), function(x) x[1]))))
+
+pupDivePhase$diveID <- unlist(unname(lapply(split(pupSeg$diveID, as.factor(pupSeg$clusterID)), function(x) x[1])))
+pupDivePhase$divePhase <- unlist(unname(lapply(split(pupSeg$divePhase, as.factor(pupSeg$clusterID)), function(x) x[1])))
+pupDivePhase$lat <- unlist(unname(lapply(split(pupSeg$lat, as.factor(pupSeg$clusterID)), function(x) x[1])))
+pupDivePhase$lon <- unlist(unname(lapply(split(pupSeg$lon, as.factor(pupSeg$clusterID)), function(x) x[1])))
+
+diveStart <- unname(lapply(split(pupSeg$diveStart, as.factor(pupSeg$clusterID)), function(x) min(x)))
+diveEnd <- unname(lapply(split(pupSeg$diveEnd, as.factor(pupSeg$clusterID)), function(x) max(x)))
+pupDivePhase$diveStart <- do.call(c, diveStart)
+pupDivePhase$diveEnd <- do.call(c, diveEnd)
+rm(diveStart, diveEnd)
+
+phaseStart <- unname(lapply(split(pupSeg$segStart, as.factor(pupSeg$clusterID)), function(x) min(x)))
+phaseEnd <- unname(lapply(split(pupSeg$segEnd, as.factor(pupSeg$clusterID)), function(x) max(x)))
+pupDivePhase$phaseStart <- do.call(c, phaseStart)
+pupDivePhase$phaseEnd <- do.call(c, phaseEnd)
+rm(phaseStart, phaseEnd)
+
+pupDivePhase$duration <- unlist(unname(lapply(split(pupSeg$duration, as.factor(pupSeg$clusterID)), sum)))
+
+pupDivePhase$depthInitial <- unlist(unname(Map(function(x, y) x[which(y == min(y))], split(pupSeg$initialDepth, as.factor(pupSeg$clusterID)), split(pupSeg$segStart, as.factor(pupSeg$clusterID)))))
+pupDivePhase$depthFinal <- unlist(unname(Map(function(x, y) x[which(y == max(y))], split(pupSeg$finalDepth, as.factor(pupSeg$clusterID)), split(pupSeg$segEnd, as.factor(pupSeg$clusterID)))))
+
+pupDivePhase$depthMin <- unlist(unname(Map(function(x, y) min(c(x, y)), split(pupSeg$initialDepth, as.factor(pupSeg$clusterID)), split(pupSeg$finalDepth, as.factor(pupSeg$clusterID)))))
+pupDivePhase$depthMax <- unlist(unname(Map(function(x, y) max(c(x, y)), split(pupSeg$initialDepth, as.factor(pupSeg$clusterID)), split(pupSeg$finalDepth, as.factor(pupSeg$clusterID)))))
+
+##%%%%%%%%%%%%%%%%%%%
+pitchFUNCTION <- function(x, y, z){
+  stopifnot(require(CircStats))
+  if(mean(y) != 2){
+    x <- x[is.na(x) == 0]
+    z <- z[is.na(x) == 0]
+    x <- x * (pi/180)
+    toMean <- unlist(unname(Map(function(x, z) rep(x, z), x, z)))
+    meanRad <- circ.mean(toMean)
+    meanDeg <- meanRad * (180/pi)
+    return(meanDeg)
+    }
+  if(mean(y) == 2)
+    return(NA)
+}
+##%%%%%%%%%%%%%%%%%%%
+
+pupDivePhase$pitch <- unlist(unname(Map(pitchFUNCTION, split(pupSeg$pitch, as.factor(pupSeg$clusterID)), split(pupSeg$divePhase, as.factor(pupSeg$clusterID)),split(pupSeg$duration, as.factor(pupSeg$clusterID)))))
+
+pupDivePhase$swimEffort <- unlist(unname(lapply(split(pupSeg$swimEffort, as.factor(pupSeg$clusterID)), sum)))
+
+pupDivePhase$timeInPCA <- unlist(unname(lapply(split(pupSeg$PCA, as.factor(pupSeg$clusterID)), sum)))
+
+pupDivePhase$solarAlt <- unlist(unname(lapply(split(pupSeg$solarAlt, as.factor(pupSeg$clusterID)), mean)))
+pupDivePhase$surfaceInt <- unlist(unname(lapply(split(pupSeg$surfaceInt, as.factor(pupSeg$clusterID)), mean)))
+
+##%%%%%%%%%%%%%%%%%%%
+verticalSpeedFUNCTION <- function(x, y){
+  x <- x[is.na(x) == 0]
+  y <- y[is.na(x) == 0]
+  x <- sum(x * y)
+  x <- x/sum(y)
+  return(x)
+}
+##%%%%%%%%%%%%%%%%%%%
+
+pupDivePhase$verticalSpeed <- unlist(unname(Map(verticalSpeedFUNCTION, split(pupSeg$verticalSpeed, as.factor(pupSeg$clusterID)), split(pupSeg$duration, as.factor(pupSeg$clusterID)))))
+
+rm(pitchFUNCTION, swmEff_FUNCTION, verticalSpeedFUNCTION)
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Read out data
+
+write.table(pupDivePhase, file = paste("./DataSorted/output4_DivePhaseSummarising/DivePhaseSummarised_AllPups.csv", sep = ""), sep = ",", col.names = TRUE, row.names = FALSE)
+
+
+
