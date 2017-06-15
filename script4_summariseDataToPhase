@@ -20,7 +20,6 @@ if (file.exists("./DataSorted/output4_DivePhaseSummarising")==FALSE){
 pupSeg <- read.table("./DataSorted/output3_PhaseAssignment/pupSeg_withDivePhases.csv", sep = ",", header = T)
 
 ##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Sort time - convert to POSIXct
 
 pupSeg$diveStart <- as.POSIXct(pupSeg$diveStart, tz = "UTC", format = "%H:%M:%S %d-%b-%Y") ##### Check these correspond to your own data
@@ -33,7 +32,6 @@ head(pupSeg$diveEnd)
 head(pupSeg$segStart)
 head(pupSeg$segEnd)
 
-##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Summarise to dive level
 
@@ -123,7 +121,6 @@ pupDivePhase$verticalSpeed <- unlist(unname(Map(verticalSpeedFUNCTION, split(pup
 
 rm(pitchFUNCTION, swmEff_FUNCTION, verticalSpeedFUNCTION)
 
-##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Read out data
 
