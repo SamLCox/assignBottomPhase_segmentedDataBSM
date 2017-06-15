@@ -1,6 +1,6 @@
 # assignBottomPhase_segmentedDataBSM
 
-These codes/scripts are intended to be used as a guide when assigning phases (descent, bottom and ascent) to seal data segmented into 5 via broken-stick models.
+These codes/scripts are intended to be used as a guide when assigning phases (descent, bottom and ascent) to seal data segmented into 5 via broken-stick models.  Codes/scripts are to be run in numercial order (i.e. 1, 2, 3...).
 
 The thresholds used can be altered - which may be necessary for different species and age classes (the current scripts were written for juvenile southern elephant seals).
 
