@@ -28,7 +28,7 @@ if (file.exists("./DataPlots/output1_ManualPhaseAssignment_Plots")==FALSE){
 ##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Read in data and replace NaN with NA
 
-pupSeg <- read.table("../Matching_HighLowData/DataSorted/One_Matched_HighLowData/Matched_HighLowData_AllPUPS_segScale.csv", sep = ",", header = T)
+pupSeg <- read.table("XXXX/summarisedData_AllPUPS_segScale.csv", sep = ",", header = T) #### This should route to the data read out from the last stage of the scoutDSA296_postDataProcessing routine
 
 ## Replace NaNs with NA
 pupSeg[is.na(pupSeg)] <- NA
