@@ -1,0 +1,132 @@
+
+rm(list=ls())
+
+require(ggplot2)
+require(spatstat)
+
+Sys.setenv(TZ='UTC') #### R will sometimes change the time of time variables when unlisting - so for safetly always set system to UTC - or whatever timezone you work in
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Creat folders
+
+if (file.exists("./DataSorted/output3_PhaseAssignment")==FALSE){
+  dir.create("./DataSorted/output3_PhaseAssignment")
+}
+
+if (file.exists("./DataPlots/output3_PhaseAssignment_DivePlots_withBotPhase")==FALSE){
+  dir.create("./DataPlots/output3_PhaseAssignment_DivePlots_withBotPhase")
+}
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Read in data and replace NaN with NA
+
+pupSeg <- read.table("XXXX/summarisedData_AllPUPS_segScale.csv", sep = ",", header = T) #### This should route to the data read out from the last stage of the scoutDSA296_postDataProcessing routine
+
+## Replace NaNs with NA
+pupSeg[is.na(pupSeg)] <- NA
+
+##%%%%%%%%%%%%%%%%%% Read in random selection data plotting
+
+randomSelection <- readRDS("./DataSorted/output1_ManualPhaseAssignment/pupSamples_withDivePhases.rds")
+randomSelection <- randomSelection[order(randomSelection$pupID, randomSelection$diveID),]
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Sort time
+
+pupSeg$diveStart <- as.POSIXct(pupSeg$diveStart, tz = "UTC", format = "%H:%M:%S %d-%b-%Y") ##### Check these correspond to your own data
+pupSeg$diveEnd <- as.POSIXct(pupSeg$diveEnd, tz = "UTC", format = "%d-%b-%Y %H:%M:%S") ##### Check these correspond to your own data
+pupSeg$segStart <- as.POSIXct(pupSeg$segStart, tz = "UTC", format = "%H:%M:%S %d-%b-%Y") ##### Check these correspond to your own data
+pupSeg$segEnd <- as.POSIXct(pupSeg$segEnd, tz = "UTC", format = "%d-%b-%Y %H:%M:%S") ##### Check these correspond to your own data
+
+head(pupSeg$diveStart)
+head(pupSeg$diveEnd)
+head(pupSeg$segStart)
+head(pupSeg$segEnd)
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Assign dive phases
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Function to assign bottom phases
+.f <- function(x, lowThres, highThres){ 
+  
+  if(max(is.na(x)) == 0){
+    
+    smoothData <- lowess(x, y = NULL, f = 1, iter = 3)
+    smoothX <- smoothData$y
+    if(x[3] < highThres)
+      x[3] <- smoothX[3]
+    
+    startB <- (which(x[2:4] < lowThres)[1]) + 1
+    endB <- (which(x[3:4] < highThres)[1]) + 1
+    
+    if(is.na(startB) == 1)
+      startB <- 2
+    if(is.na(endB) == 1)
+      endB <- 4
+    
+    phaseID <- rep(NA, 5)
+    
+    phaseID[1:(startB-1)] <- 1
+    phaseID[startB:(endB)] <- 2
+    phaseID[(endB+1):5] <- 3
+    
+  }
+  
+  if(max(is.na(x)) > 0){
+    phaseID <- rep(NA, 5)
+  }
+  
+  return(phaseID)
+  
+}
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Function
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+##%%%%%%%%%%%%%%%%%%%%% Low resolution
+
+divePhase <- lapply(split(pupSeg$verticalSpeed, list(as.factor(pupSeg$diveID), as.factor(pupSeg$pupID)), drop = TRUE), function(x) .f(x, 0.42, -0.76))  #### 0.42 and -0.76 are those threshold assigned by the previous script (script2)
+divePhase <- unlist(unname(divePhase))
+
+pupSeg$divePhase <- divePhase
+rm(divePhase)
+
+##%%%%%%%%%%%%%%%%%%%%% Plot out dive phases in red
+#### Plot out dive depths and vertical speeds of sampled dives - low res
+
+for(II in 1:nrow(randomSelection)){
+  
+  refPup <- randomSelection$pupID[II]
+  refDive <- randomSelection$diveID[II]
+  
+  ind <- which(pupSeg$pupID == refPup & pupSeg$diveID == refDive)
+  ind2 <- which(pupSeg$pupID == refPup & pupSeg$diveID == refDive & pupSeg$divePhase == 2)
+  
+  png(filename = paste("./DataPlots/output3_PhaseAssignment_DivePlots_withBotPhase/divePlotted_withBotPhase_pup", refPup, "_dive", refDive, ".png", sep=""), width = 30, height = 40, res = 150, units = "cm")
+  par(mfrow = c(2, 1))
+  
+  plot(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind]), c(pupSeg$verticalSpeed[ind], NA), xlab = "mins", ylab = "vertical speed (m/s)", type = "o", yaxt="n", xaxt="n", ylim = c(-1.8, 1.8))
+  points(c(pupSeg$segStart[ind2][1], pupSeg$segEnd[ind2]), c(pupSeg$verticalSpeed[ind2], NA), type = "o", col="red")
+  r <- as.POSIXct(round(range(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind])), "mins"))
+  axis.POSIXct(1, at = seq(r[1], r[2], by = "min"), format = "%M")
+  axis(2, at = c(-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2))
+  grid(NA, NULL, lty = 6, col = "azure4")
+  rm(r)
+  
+  plot(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind]), c(pupSeg$initialDepth[ind][1], pupSeg$finalDepth[ind]), xlab = "mins", ylab = "depth (m)", type = "o", ylim = rev(range(pupSeg$finalDepth[ind])), xaxt="n")
+  points(c(pupSeg$segStart[ind2][1], pupSeg$segEnd[ind2]), c(pupSeg$initialDepth[ind2][1], pupSeg$finalDepth[ind2]), type = "o", col="red")
+  r <- as.POSIXct(round(range(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind])), "mins"))
+  axis.POSIXct(1, at = seq(r[1], r[2], by = "min"), format = "%M")
+  dev.off()
+  rm(r)
+  
+  rm(refPup, refDive, ind, ind2)
+  
+}
+rm(II) 
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+##%%%%%%%%%%%%%%%%%%%%% Save out data
+
+write.table(pupSeg, file = "./DataSorted/output3_PhaseAssignment/pupSeg_withDivePhases.csv", sep = ",", col.names = TRUE, row.names = FALSE)
+saveRDS(randomSelection, "./DataSorted/output3_PhaseAssignment/randomSelectionDives.rds")
