@@ -1,3 +1,5 @@
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Assign the dive phases using the function and thresholds determined in previous script - stage 3
 
 rm(list=ls())
 
