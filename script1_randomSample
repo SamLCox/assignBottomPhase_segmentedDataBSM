@@ -37,7 +37,6 @@ pupSeg[is.na(pupSeg)] <- NA
 ##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### Sort time
 
-## low res times
 pupSeg$diveStart <- as.POSIXct(pupSeg$diveStart, tz = "UTC", format = "%H:%M:%S %d-%b-%Y") ##### Check these correspond to your own data
 pupSeg$diveEnd <- as.POSIXct(pupSeg$diveEnd, tz = "UTC", format = "%d-%b-%Y %H:%M:%S") ##### Check these correspond to your own data
 pupSeg$segStart <- as.POSIXct(pupSeg$segStart, tz = "UTC", format = "%H:%M:%S %d-%b-%Y") ##### Check these correspond to your own data
