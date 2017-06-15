@@ -1,0 +1,161 @@
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Determine best thresholds for the automated assignment of bottom phases - stage 2
+
+rm(list=ls())
+
+require(ggplot2)
+
+Sys.setenv(TZ='UTC')
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Creat folders
+
+if (file.exists("./DataSorted/output2_decideThreshols")==FALSE){
+  dir.create("./DataSorted/output2_decideThreshols")
+}
+
+if (file.exists("./DataPlots/output2_decideThreshols_Plots")==FALSE){
+  dir.create("./DataPlots/output2_decideThreshols_Plots")
+}
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Read in data and replace NaN with NA
+
+pupSeg <- read.table("XXXX/summarisedData_AllPUPS_segScale.csv", sep = ",", header = T) #### This should route to the data read out from the last stage of the scoutDSA296_postDataProcessing routine
+
+## Replace NaNs with NA
+pupSeg[is.na(pupSeg)] <- NA
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Sort time
+
+## low res times
+pupSeg$diveStart <- as.POSIXct(pupSeg$diveStart, tz = "UTC", format = "%H:%M:%S %d-%b-%Y")
+pupSeg$diveEnd <- as.POSIXct(pupSeg$diveEnd, tz = "UTC", format = "%d-%b-%Y %H:%M:%S")
+pupSeg$segStart <- as.POSIXct(pupSeg$segStart, tz = "UTC", format = "%H:%M:%S %d-%b-%Y")
+pupSeg$segEnd <- as.POSIXct(pupSeg$segEnd, tz = "UTC", format = "%d-%b-%Y %H:%M:%S")
+
+head(pupSeg$diveStart)
+head(pupSeg$diveEnd)
+head(pupSeg$segStart)
+head(pupSeg$segEnd)
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Read in sampled dive data
+
+randomSelection <- readRDS("./DataSorted/output1_ManualPhaseAssignment/pupSamples_withDivePhases.rds")
+randomSelection <- randomSelection[order(randomSelection$pupID, randomSelection$diveID),]
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Create dataframe of sampled data
+
+dataSelection <- list()
+
+for(II in 1:nrow(randomSelection)){
+  
+  refPup <- randomSelection$pupID[II]
+  refDive <- randomSelection$diveID[II]
+  
+  ind <- which(pupSeg$pupID == refPup & pupSeg$diveID == refDive)
+  
+  tempData <- data.frame(pupID = pupSeg$pupID[ind], 
+                         diveID  = pupSeg$diveID[ind], 
+                         verticalSpeed = pupSeg$verticalSpeed[ind], 
+                         initialDepth = pupSeg$initialDepth[ind],
+                         finalDepth = pupSeg$finalDepth[ind])
+
+  dataSelection[[II]] <- tempData
+
+  rm(refPup, refDive, ind, tempData)
+  
+}
+
+dataSelection <- do.call("rbind", dataSelection)
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Try different thresholds
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Function to assign bottom phases
+.f <- function(x, lowThres, highThres){ 
+
+  smoothData <- lowess(x, y = NULL, f = 1, iter = 3)
+  smoothX <- smoothData$y
+  if(x[3] < highThres)
+    x[3] <- smoothX[3]
+  
+  startB <- (which(x[2:4] < lowThres)[1]) + 1
+  endB <- (which(x[3:4] < highThres)[1]) + 1
+  
+  if(is.na(startB) == 1)
+    startB <- 2
+  if(is.na(endB) == 1)
+    endB <- 4
+  
+  return(data.frame(startB, endB))
+
+}
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Function
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+##%%%%%%%%%%%%%%%%%%%%% Evaluate thresholds
+
+thresTestStart <- seq(from = 0.3, to = 0.6, by = 0.01)
+thresTestEnd <- seq(from = -0.9, to = -0.6, by = 0.01)
+
+thresholdEvaluation <- list()
+
+for(II in 1:length(thresTestStart)){
+  
+limits_Thres<- lapply(split(dataSelection$verticalSpeed, list(as.factor(dataSelection$diveID), as.factor(dataSelection$pupID)), drop = TRUE), function(x, y, z) .f(x, y, z), y = thresTestStart[II], z = thresTestEnd[II])
+limits_Thres <- do.call("rbind", limits_Thres)
+
+tempDataFrame <- data.frame(thresTestStart = thresTestStart[II],
+                            thresTestEnd = thresTestEnd[II], 
+                            percentageCorrect_start = length(which(limits_Thres$startB - randomSelection$bottomStart == 0))/nrow(limits_Thres),
+                            percentageCorrect_end = length(which(limits_Thres$endB - randomSelection$bottomEnd == 0))/nrow(limits_Thres),
+                            absDiff_start = sum(abs(limits_Thres$startB - randomSelection$bottomStart)),
+                            absDiff_end = sum(abs(limits_Thres$endB - randomSelection$bottomEnd)))
+
+thresholdEvaluation[[II]] <- tempDataFrame
+
+rm(limits_Thres, tempDataFrame)
+
+}
+
+rm(II, thresTestStart, thresTestEnd)
+
+thresholdEvaluation <- do.call("rbind", thresholdEvaluation)
+
+
+which(thresholdEvaluation$percentageCorrect_start == max(thresholdEvaluation$percentageCorrect_start))
+which(thresholdEvaluation$percentageCorrect_end == max(thresholdEvaluation$percentageCorrect_end))
+
+which(thresholdEvaluation$absDiff_start == min(thresholdEvaluation$absDiff_start))
+which(thresholdEvaluation$absDiff_end == min(thresholdEvaluation$absDiff_end))
+
+# Start threshold of 0.42
+# End threshold of -0.76
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+##%%%%%%%%%%%%%%%%%%%%% Plot/save out results
+
+png(filename = "./DataPlots/output2_decideThreshols_Plots/thresholdEvaluation.png", width = 40, height = 40, res = 150, units = "cm")
+par(mfrow = c(2,2))
+
+plot(thresholdEvaluation$percentageCorrect_start ~ thresholdEvaluation$thresTestStart, type = 'o', xlab = "start threshold", ylab = "percentage correct")
+grid(NULL, NULL, lty = 6, col = "azure4")
+plot(thresholdEvaluation$percentageCorrect_end ~ thresholdEvaluation$thresTestEnd, type = 'o', xlab = "end threshold", ylab = "percentage correct")
+grid(NULL, NULL, lty = 6, col = "azure4")
+plot(thresholdEvaluation$absDiff_start ~ thresholdEvaluation$thresTestStart, type = 'o', xlab = "start threshold", ylab = "abs difference")
+grid(NULL, NULL, lty = 6, col = "azure4")
+plot(thresholdEvaluation$absDiff_end ~ thresholdEvaluation$thresTestEnd, type = 'o', xlab = "end threshold", ylab = "abs difference")
+grid(NULL, NULL, lty = 6, col = "azure4")
+
+dev.off()
+
+write.table(thresholdEvaluation, file = "./DataSorted/output2_decideThreshols/thresholdEvaluation.csv", sep = ",", col.names = TRUE, row.names = FALSE)
+
+
+
+
+
