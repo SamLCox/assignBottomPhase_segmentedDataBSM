@@ -1,0 +1,136 @@
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Choose a random sample to base phase assignment on - stage 1
+
+rm(list=ls())
+
+require(ggplot2)
+Sys.setenv(TZ='UTC') #### R will sometimes change the time of time variables when unlisting - so for safetly always set system to UTC - or whatever timezone you work in
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Creat folders
+
+if (file.exists("./DataSorted")==FALSE){
+  dir.create("./DataSorted")
+}
+
+if (file.exists("./DataSorted/output1_ManualPhaseAssignment")==FALSE){
+  dir.create("./DataSorted/output1_ManualPhaseAssignment")
+}
+
+if (file.exists("./DataPlots")==FALSE){
+  dir.create("./DataPlots")
+}
+
+if (file.exists("./DataPlots/output1_ManualPhaseAssignment_Plots")==FALSE){
+  dir.create("./DataPlots/output1_ManualPhaseAssignment_Plots")
+}
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Read in data and replace NaN with NA
+
+pupSeg <- read.table("../Matching_HighLowData/DataSorted/One_Matched_HighLowData/Matched_HighLowData_AllPUPS_segScale.csv", sep = ",", header = T)
+
+## Replace NaNs with NA
+pupSeg[is.na(pupSeg)] <- NA
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Sort time
+
+## low res times
+pupSeg$diveStart <- as.POSIXct(pupSeg$diveStart, tz = "UTC", format = "%H:%M:%S %d-%b-%Y") ##### Check these correspond to your own data
+pupSeg$diveEnd <- as.POSIXct(pupSeg$diveEnd, tz = "UTC", format = "%d-%b-%Y %H:%M:%S") ##### Check these correspond to your own data
+pupSeg$segStart <- as.POSIXct(pupSeg$segStart, tz = "UTC", format = "%H:%M:%S %d-%b-%Y") ##### Check these correspond to your own data
+pupSeg$segEnd <- as.POSIXct(pupSeg$segEnd, tz = "UTC", format = "%d-%b-%Y %H:%M:%S") ##### Check these correspond to your own data
+
+head(pupSeg$diveStart)
+head(pupSeg$diveEnd)
+head(pupSeg$segStart)
+head(pupSeg$segEnd)
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Create sample of dives to base algorithms on
+
+pupIDs <- unique(pupSeg$pupID)
+
+selectionPup <- rep(NA, 40*length(pupIDs))
+selectionRand <- rep(NA, 40*length(pupIDs))
+
+for(II in 1:length(pupIDs)){
+  selectionPup[(((II-1) * 40)+1):(II*40)] <- pupIDs[II]
+  selectionRand[(((II-1) * 40)+1):(II*40)] <- sample(unique(pupSeg$diveID[pupSeg$pupID == pupIDs[II]]), 40)
+}
+rm(II)
+rm(pupIDs)
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Plot out dive depths and vertical speeds of sampled dives
+
+segmentStartEnd_Inc1 <- rep(NA, length(selectionPup))
+segmentStartEnd_Inc2 <- rep(NA, length(selectionPup))
+segmentStartEnd_Inc <- cbind(segmentStartEnd_Inc1, segmentStartEnd_Inc2)
+rm(segmentStartEnd_Inc1, segmentStartEnd_Inc2)
+
+for(II in 1:length(selectionPup)){
+  
+  refPup <- selectionPup[II]
+  refDive <- selectionRand[II]
+  
+  ind <- which(pupSeg$pupID == refPup & pupSeg$diveID == refDive)
+  
+  par(mfrow = c(2, 1))
+  
+  plot(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind]), c(pupSeg$verticalSpeed[ind], NA), xlab = "mins", ylab = "vertical speed (m/s)", type = "o", yaxt="n", xaxt="n", ylim = c(-1.8, 1.8))
+  r <- as.POSIXct(round(range(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind])), "mins"))
+  axis.POSIXct(1, at = seq(r[1], r[2], by = "min"), format = "%M")
+  axis(2, at = c(-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2))
+  grid(NA, NULL, lty = 6, col = "azure4")
+  rm(r)
+  
+  plot(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind]), c(pupSeg$initialDepth[ind][1], pupSeg$finalDepth[ind]), xlab = "mins", ylab = "depth (m)", type = "o", ylim = rev(range(pupSeg$finalDepth[ind])), xaxt="n")
+  r <- as.POSIXct(round(range(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind])), "mins"))
+  axis.POSIXct(1, at = seq(r[1], r[2], by = "min"), format = "%M")
+  rm(r)
+   
+  tempSelection <- identify(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind]), c(0, pupSeg$finalDepth[ind]))
+  dev.off()
+  
+  if(length(tempSelection) == 2){
+    segmentStartEnd_Inc[II, 1:2] <- tempSelection
+    segmentStartEnd_Inc[II, 2] <- segmentStartEnd_Inc[II, 2] - 1
+  }
+  rm(tempSelection)
+  
+  ind2 <- which(pupSeg$pupID == refPup & pupSeg$diveID == refDive & pupSeg$segmentID == segmentStartEnd_Inc[II, 1]):which(pupSeg$pupID == refPup & pupSeg$diveID == refDive & pupSeg$segmentID == segmentStartEnd_Inc[II, 2])
+  
+  png(filename = paste("./DataPlots/output1_ManualPhaseAssignment_Plots/divePlotted_pup", refPup, "_dive", refDive, ".png", sep=""), width = 30, height = 40, res = 150, units = "cm")
+  par(mfrow = c(2, 1))
+  plot(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind]), c(pupSeg$verticalSpeed[ind], NA), xlab = "mins", ylab = "vertical speed (m/s)", type = "o", yaxt="n", xaxt="n", ylim = c(-1.8, 1.8))
+  points(c(pupSeg$segStart[ind2][1], pupSeg$segEnd[ind2]), c(pupSeg$verticalSpeed[ind2], NA), type = "o", col="red")
+  r <- as.POSIXct(round(range(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind])), "mins"))
+  axis.POSIXct(1, at = seq(r[1], r[2], by = "min"), format = "%M")
+  axis(2, at = c(-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2))
+  grid(NA, NULL, lty = 6, col = "azure4")
+  rm(r)
+  
+  plot(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind]), c(pupSeg$initialDepth[ind][1], pupSeg$finalDepth[ind]), xlab = "mins", ylab = "depth (m)", type = "o", ylim = rev(range(pupSeg$finalDepth[ind])), xaxt="n")
+  points(c(pupSeg$segStart[ind2][1], pupSeg$segEnd[ind2]), c(pupSeg$initialDepth[ind2][1], pupSeg$finalDepth[ind2]), type = "o", col="red")
+  r <- as.POSIXct(round(range(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind])), "mins"))
+  axis.POSIXct(1, at = seq(r[1], r[2], by = "min"), format = "%M")
+  dev.off()
+  rm(r)
+  
+  rm(refPup, refDive, ind, ind2)
+  
+}
+rm(II)    
+
+
+##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+##%%%%%%%%%%%%%%%%%%%%% Save out data
+
+randomSelection <- data.frame(pupID = selectionPup, diveID = selectionRand, bottomStart = segmentStartEnd_Inc[, 1], bottomEnd = segmentStartEnd_Inc[, 2])
+rm(selectionPup, selectionRand, segmentStartEnd_Inc)
+
+write.table(randomSelection, file = "./DataSorted/output1_ManualPhaseAssignment/pupSamples_withDivePhases.csv", sep = ",", col.names = TRUE, row.names = FALSE)
+saveRDS(randomSelection, "./DataSorted/output1_ManualPhaseAssignment/pupSamples_withDivePhases.rds")
+
