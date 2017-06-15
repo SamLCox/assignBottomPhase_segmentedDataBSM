@@ -1,5 +1,5 @@
 ##%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#### Choose a random sample to base phase assignment on - stage 1
+#### Choose a random sample to base phase assignment on and use this to manually assign dive phases - stage 1
 
 rm(list=ls())
 
@@ -91,7 +91,7 @@ for(II in 1:length(selectionPup)){
   axis.POSIXct(1, at = seq(r[1], r[2], by = "min"), format = "%M")
   rm(r)
    
-  tempSelection <- identify(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind]), c(0, pupSeg$finalDepth[ind]))
+  tempSelection <- identify(c(pupSeg$segStart[ind][1], pupSeg$segEnd[ind]), c(0, pupSeg$finalDepth[ind]))  #### Here you should clikc twice in the plot where you think the bottom phase starts and ends.  Then press escape.  If you click less or more than two times the script will not work so pay attention!
   dev.off()
   
   if(length(tempSelection) == 2){
